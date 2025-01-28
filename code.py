@@ -16,15 +16,19 @@ class ButtonController:
         self.keyboard = Keyboard(usb_hid.devices)
 
     def add_button(self, pin_number, label, kbd_key=None, long_press_threshold=None, macro_short=None, macro_long=None):
+        print('------------')
+        print(label)
+        print(kbd_key)
+        print(macro_short)
         if kbd_key is None and macro_short is None:
-            raise ValueError('Must specify either kby_key or macro_short')
+            raise ValueError('Must specify either kbd_key or macro_short')
         if kbd_key is not None and macro_short is not None:
-            raise ValueError('Must specify only kby_key or macro_short')
+            raise ValueError('Must specify only kdy_key or macro_short')
         pin = getattr(board, f"GP{pin_number}")
         button = digitalio.DigitalInOut(pin)
         button.direction = digitalio.Direction.INPUT
         button.pull = digitalio.Pull.DOWN
-        # p is the contents of this
+        # this is all in p in run()
         self.buttons[label] = {
             'button': button,
             'kbd_key': getattr(Keycode, kbd_key) if kbd_key else None,
@@ -39,8 +43,15 @@ class ButtonController:
 
     def raw_release(self, *keys):
         self.keyboard.release(*keys)
-
     
+    def combo_press(self, combo, key, t=.1):
+        print(key)
+        print("Keycode in scope:", "Keycode" in globals(), "Keycode" in locals())
+        k = getattr(Keycode, key)
+        self.raw_press(*combo, k),
+        time.sleep(t),
+        self.raw_release(*combo, k)
+
     def run(self):
         while True:
             for label, p in self.buttons.items():
@@ -117,42 +128,42 @@ keyb = ButtonController()
 def macro_freemem():
     print("Free memory:", gc.mem_free())
 
+    
+
+supercombo = (Keycode.CONTROL, Keycode.ALT, Keycode.COMMAND, Keycode.SHIFT)
+
+# Based on hotkeys I configured in Rectangle
 button_map = {
-    "Button 1": {
+    "Fullscreen": {
         "pin": 14,
-        "kbd_key": "A",
-        "long_press_threshold": 2,
-        "macro_long": lambda: print("Button 1 long press triggered!"),
+        "macro_short": lambda: keyb.combo_press(supercombo, 'UP_ARROW'),
+        "long_press_threshold": 0.25,
+        "macro_long":  lambda: keyb.combo_press(supercombo, 'DOWN_ARROW')
     },
-    "Button 2": {
+    "LeftHalf": {
         "pin": 15,
-        "macro_short": lambda: print("Button 2 short macro triggered!"),
-        "long_press_threshold": 1,
-        "macro_long": lambda: print("Free memory:", gc.mem_free()),
+        "macro_short": lambda: keyb.combo_press(supercombo, 'LEFT_ARROW')
     },
-    "Button 3": {
+    "RightHalf": {
         "pin": 5,
-        "kbd_key": "B",
+        "macro_short": lambda: keyb.combo_press(supercombo, 'RIGHT_ARROW')
     },
     "Button 4": {
         "pin": 3,
-        "macro_short": lambda: print("Button 4 short macro triggered!"),
+        "macro_short": lambda: keyb.combo_press(supercombo, 'KEYPAD_SIX')
     },
     "Button 5": {
         "pin": 16,
-        "kbd_key": "C",
-        "long_press_threshold": 3,
-        "macro_long": lambda: print("Button 5 long macro triggered!"),
+        "macro_short": lambda: keyb.combo_press(supercombo, 'KEYPAD_FOUR')
     },
-    "Button 6": {
+    "DesktopLeft": {
         "pin": 2,
-        "macro_short": lambda: print("Button 6 short macro triggered!"),
-        "long_press_threshold": 2,
-        "macro_long": lambda: print("Button 6 long macro triggered!"),
+        "macro_short": lambda: keyb.combo_press(Keycode.CONTROL, 'LEFT_ARROW')
+        
     },
-    "Button 7": {
+    "DesktopRight": {
         "pin": 0,
-        "kbd_key": "D",
+        "macro_short": lambda: keyb.combo_press(Keycode.CONTROL, 'RIGHT_ARROW')
     },
     "Button 8": {
         "pin": 9,
@@ -171,9 +182,9 @@ button_map = {
         "macro_short": lambda: print("Button 10 short macro triggered!"),
         "long_press_threshold": 1.5,
         "macro_long": lambda: (
-            keyb.raw_press(Keycode.CONTROL, Keycode.ALT, Keycode.F),
+            print('derp'),
             time.sleep(1),
-            keyb.raw_release(Keycode.CONTROL, Keycode.ALT, Keycode.F),
+            print('derp')
         ),
     },
 }
