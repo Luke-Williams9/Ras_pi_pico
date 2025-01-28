@@ -6,22 +6,6 @@ import board
 import digitalio
 import gc
 
-def macro_function():
-    print("MACRO")
-    
-# GPIOpin, label, short_key, long_thresh, long_callback
-button_map = [
-    (2, "Button 1", "A", 2.0, macro_function),
-    (3, "Button 2", "B", 1.5, lambda: print("Button 2 long press!")),
-    (4, "Button 3", "C", None, None),  # Short press only
-    (5, "Button 4", "D", 2.0, lambda: print("Button 4 long press!")),
-    (6, "Button 5", "E", None, None),  # Short press only
-    (7, "Button 6", "F", 2.0, lambda: print("Button 6 long press!")),
-    (8, "Button 7", "G", 1.0, macro_function),
-    (9, "Button 8", "H", None, None),
-    (10, "Button 9", "I", 3.0, lambda: print("Button 9 long press!")),
-    (11, "Button 10", "J", 2.5, macro_function),
-]
 
 
 
@@ -31,61 +15,66 @@ class ButtonController:
         self.buttons = {}
         self.keyboard = Keyboard(usb_hid.devices)
 
-    def add_button(self, pin_number, label, short_press_key=None, long_press_threshold=None, long_press_callback=None):
+    def add_button(self, pin_number, label, kbd_key=None, long_press_threshold=None, macro_short=None, macro_long=None):
+        if kbd_key is None and macro_short is None:
+            raise ValueError('Must specify either kby_key or macro_short')
+        if kbd_key is not None and macro_short is not None:
+            raise ValueError('Must specify only kby_key or macro_short')
         pin = getattr(board, f"GP{pin_number}")
         button = digitalio.DigitalInOut(pin)
         button.direction = digitalio.Direction.INPUT
         button.pull = digitalio.Pull.DOWN
+        # p is the contents of this
         self.buttons[label] = {
             'button': button,
-            'short_press_key': getattr(Keycode, short_press_key) if short_press_key else None,
+            'kbd_key': getattr(Keycode, kbd_key) if kbd_key else None,
             'long_press_threshold': long_press_threshold,
-            'long_press_callback': long_press_callback,
+            'macro_short': macro_short,
+            'macro_long': macro_long,
             'pressed': False,
             'press_time': None,
         }
+    def raw_press(self, *keys):
+        self.keyboard.press(*keys)
 
+    def raw_release(self, *keys):
+        self.keyboard.release(*keys)
+
+    
     def run(self):
         while True:
-            for label, info in self.buttons.items():
-                button = info['button']
-                short_press_key = info['short_press_key']
-                long_press_threshold = info['long_press_threshold']
-                long_press_callback = info['long_press_callback']
-
+            for label, p in self.buttons.items():
                 try:
                     # Button pressed
-                    if button.value and not info['pressed']:
-                        info['pressed'] = True
-                        info['press_time'] = time.monotonic()
+                    if p['button'].value and not p['pressed']:
+                        p['pressed'] = True
+                        p['press_time'] = time.monotonic()
 
                         # Handle short press immediately
-                        if short_press_key:
-                            self.keyboard.press(short_press_key)
+
+                        if p['kbd_key']:
+                            self.keyboard.press(p['kbd_key'])
+                        else:
+                            p['macro_short']()
 
                     # Button still pressed (check for long press)
-                    elif button.value and info['pressed']:
-                        if long_press_threshold and (time.monotonic() - info['press_time']) > long_press_threshold:
-                            if long_press_callback:
-                                long_press_callback()
-                                # Reset press time to prevent multiple long press triggers
-                                info['press_time'] = time.monotonic()
+                    elif p['button'].value and p['pressed']:
+                        if p['long_press_threshold'] and (time.monotonic() - p['press_time']) > p['long_press_threshold']:
+                            if p['macro_long']:
+                                p['macro_long']()
+                                p['press_time'] = time.monotonic() 
 
                     # Button released
-                    elif not button.value and info['pressed']:
-                        info['pressed'] = False
-
-                        # Handle short press release
-                        if short_press_key:
-                            self.keyboard.release(short_press_key)
-
-                        # Reset press time
-                        info['press_time'] = None
+                    elif not p['button'].value and p['pressed']:
+                        p['pressed'] = False
+                        if p['kbd_key']:
+                            self.keyboard.release(p['kbd_key'])
+                        p['press_time'] = None
 
                 except ValueError as e:
                     print(f"Error: {e}")
 
-            time.sleep(0.01)
+            time.sleep(0.02)
 
 
 
@@ -122,40 +111,88 @@ class gpio_diag:
         except KeyboardInterrupt:
             print("Monitoring stopped.")
 
-# Usage example
-keyb = gpio_diag()
-keyb.monitor_gpio()
-
-
-
-
-
-
-
-
 
 # Initialize and load button definitions
-# keyb = ButtonController()
-# for pin, label, short_key, long_thresh, long_callback in button_map:
-#     keyb.add_button(pin, label, short_key, long_thresh, long_callback)
-
+keyb = ButtonController()
 def macro_freemem():
     print("Free memory:", gc.mem_free())
 
+button_map = {
+    "Button 1": {
+        "pin": 14,
+        "kbd_key": "A",
+        "long_press_threshold": 2,
+        "macro_long": lambda: print("Button 1 long press triggered!"),
+    },
+    "Button 2": {
+        "pin": 15,
+        "macro_short": lambda: print("Button 2 short macro triggered!"),
+        "long_press_threshold": 1,
+        "macro_long": lambda: print("Free memory:", gc.mem_free()),
+    },
+    "Button 3": {
+        "pin": 5,
+        "kbd_key": "B",
+    },
+    "Button 4": {
+        "pin": 3,
+        "macro_short": lambda: print("Button 4 short macro triggered!"),
+    },
+    "Button 5": {
+        "pin": 16,
+        "kbd_key": "C",
+        "long_press_threshold": 3,
+        "macro_long": lambda: print("Button 5 long macro triggered!"),
+    },
+    "Button 6": {
+        "pin": 2,
+        "macro_short": lambda: print("Button 6 short macro triggered!"),
+        "long_press_threshold": 2,
+        "macro_long": lambda: print("Button 6 long macro triggered!"),
+    },
+    "Button 7": {
+        "pin": 0,
+        "kbd_key": "D",
+    },
+    "Button 8": {
+        "pin": 9,
+        "macro_short": lambda: print("Button 8 short macro triggered!"),
+        "long_press_threshold": 1.2,
+        "macro_long": lambda: print("Button 8 long macro triggered!"),
+    },
+    "Button 9": {
+        "pin": 10,
+        "kbd_key": "E",
+        "long_press_threshold": 4,
+        "macro_long": lambda: print("Button 9 long macro triggered!"),
+    },
+    "Button 10": {
+        "pin": 11,
+        "macro_short": lambda: print("Button 10 short macro triggered!"),
+        "long_press_threshold": 1.5,
+        "macro_long": lambda: (
+            keyb.raw_press(Keycode.CONTROL, Keycode.ALT, Keycode.F),
+            time.sleep(1),
+            keyb.raw_release(Keycode.CONTROL, Keycode.ALT, Keycode.F),
+        ),
+    },
+}
 
-# Example usage
-def macro_one():
-    print("Long press action triggered!")
+keyb = ButtonController()
 
-# Initialize ButtonController
-# keyb = ButtonController()
-
-# Add all buttons from the map
-# for pin, label, key in button_map:
-#    keyb.add_button(pin, label, key)
-
-
-# keyb.run()
+# Add buttons from the button_map
+for label, config in button_map.items():
+    keyb.add_button(
+        pin_number=config["pin"],
+        label=label,
+        kbd_key=config.get("kbd_key"),
+        long_press_threshold=config.get("long_press_threshold"),
+        macro_short=config.get("macro_short"),
+        macro_long=config.get("macro_long"),
+    )
+keyb.run()
+# keyb = gpio_diag()
+# keyb.monitor_gpio()
 
 
 
