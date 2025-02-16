@@ -1,30 +1,3 @@
-"""
-Raspberry Pi Pico GPIO Controller Module
-
-This module provides classes for controlling GPIO pins on a Raspberry Pi Pico,
-specifically designed for creating custom input devices like macro keypads and
-rotary encoders. It supports both physical pin numbers and GPIO numbers for
-flexible pin configuration.
-
-Key Features:
-- Button support with short and long press detection
-- Rotary encoder support with multiple modes (scroll, zoom, volume)
-- GPIO diagnostic tools for testing and debugging
-- Edit mode support for safe USB drive access
-
-Classes:
-    ButtonController: Main controller for buttons and encoders
-    gpio_diag: Diagnostic tool for monitoring GPIO pin states
-
-Dependencies:
-    - CircuitPython
-    - Adafruit HID library
-    - board
-    - digitalio
-    - rotaryio
-    - usb_hid
-"""
-
 import time
 import board
 import digitalio
@@ -35,44 +8,11 @@ from adafruit_hid.keycode import Keycode
 from adafruit_hid.mouse import Mouse
 from adafruit_hid.consumer_control import ConsumerControl
 from adafruit_hid.consumer_control_code import ConsumerControlCode
-from env import EDIT_MODE_PIN
+from env import PRODUCTION_MODE_PIN, SWITCH_MODE
 
 class ButtonController:
-    """Main controller for GPIO-based input devices.
-    
-    This class manages button and rotary encoder inputs, converting them into
-    keyboard shortcuts, mouse movements, or custom macro actions. It supports
-    both physical pin numbers and GPIO numbers for flexible configuration.
-    
-    Features:
-        - Button input with short and long press detection
-        - Rotary encoder support with multiple modes:
-            * Horizontal/vertical scrolling
-            * Zoom control
-            * Volume control
-            * Custom key mappings
-            * Custom macro functions
-        - Flexible pin configuration using either physical pins or GPIO numbers
-        - Edit mode protection to prevent accidental pin usage
-    
-    Example:
-        >>> controller = ButtonController()
-        >>> # Add a button that sends 'A' on short press
-        >>> controller.add_button("key_a", gpio=15, kbd_key="A")
-        >>> # Add an encoder for horizontal scrolling
-        >>> controller.add_encoder("scroll", gpio_a=16, gpio_b=17, scroll_mode="horizontal")
-        >>> controller.run()
-    """
     class PicoGPIO:
-        """Helper class for Raspberry Pi Pico GPIO pin mapping.
-        
-        Provides bidirectional mapping between physical pin numbers (1-40) and
-        GPIO numbers (0-28), as well as conversion to board.GP* objects.
-        
-        The Raspberry Pi Pico has 40 physical pins, but not all are GPIO pins.
-        This class maintains the mapping and provides convenient methods to
-        convert between different pin numbering systems.
-        """
+        """Helper class for Raspberry Pi Pico GPIO pin mapping"""
         
         # Physical pin to GPIO mapping
         PIN_TO_GPIO = {
@@ -133,17 +73,17 @@ class ButtonController:
         self.mouse = Mouse(usb_hid.devices)
         self.cc = ConsumerControl(usb_hid.devices)  # For media controls
 
-    def _check_edit_mode_pin(self, board_gpio):
-        """Check if the given GPIO pin is the EDIT_MODE_PIN.
+    def _check_production_mode_pin(self, board_gpio):
+        """Check if the given GPIO pin is the PRODUCTION_MODE_PIN.
         
         Args:
             board_gpio: The board.GP* pin object to check
             
         Raises:
-            ValueError: If the pin is the EDIT_MODE_PIN
+            ValueError: If the pin is the PRODUCTION_MODE_PIN
         """
-        if board_gpio == EDIT_MODE_PIN:
-            raise ValueError('Cannot use EDIT_MODE_PIN for a button or encoder')
+        if board_gpio == PRODUCTION_MODE_PIN:
+            raise ValueError('Cannot use PRODUCTION_MODE_PIN for a button or encoder')
 
     def _get_gpio_number(self, pin=None, gpio=None):
         """Get GPIO number from either pin or gpio input.
@@ -167,61 +107,64 @@ class ButtonController:
             return self.gpio.get_gpio_pin(pin)
         return gpio
 
-    def add_button(self, label, pin=None, gpio=None, kbd_key=None, long_press_threshold=None, macro_short=None, macro_long=None):
+    #def add_button(self, label, pin=None, gpio=None, kbd_key=None, long_press_threshold=None, macro_press=None, macro_long=None, macro_release=None):
+    def add_button(self, label, **kwargs):
         """Add a button to the controller.
         
-        Args:
+        Args:   
             label (str): Label for the button
             pin (int, optional): Physical pin number (1-40)
             gpio (int, optional): GPIO number (0-28)
             kbd_key (str, optional): Key to press when button is pressed
             long_press_threshold (float, optional): Time in seconds for long press
-            macro_short (callable, optional): Function to call on short press
+            macro_press (callable, optional): Function to call on short press
             macro_long (callable, optional): Function to call on long press
+            macro_release (callable, optional): Function to call on button release
             
         Raises:
-            ValueError: If pin configuration is invalid or if using EDIT_MODE_PIN
+            ValueError: If pin configuration is invalid or if using PRODUCTION_MODE_PIN
         """
-        print('------------')
-        print(label)
-        print(kbd_key)
-        print(macro_short)
-        
-        # Basic definition error handling
-        if kbd_key is None and macro_short is None:
-            raise ValueError('Must specify either kbd_key or macro_short')
-        if kbd_key is not None and macro_short is not None:
-            raise ValueError('Must specify only kbd_key or macro_short')
-        if pin is None and gpio is None:
-            raise ValueError('Must specify either pin or gpio')
-        if pin is not None and gpio is not None:
-            raise ValueError('Must specify only pin or gpio')    
+        # unpack the kwargs
+        a = {}
+        for key, value in kwargs.items():
+            print(key)
+            a[key] = value  # Create a local variable with the name of the key
         
         # Normalize pin definition
-        gpio_number = self._get_gpio_number(pin=pin, gpio=gpio)
+
+        gpio_number = self._get_gpio_number(pin=a.get('pin'), gpio=a.get('gpio'))
         board_gpio = self.gpio.get_board_pin(gpio_number)
         
-        # Check if pin is EDIT_MODE_PIN
-        self._check_edit_mode_pin(board_gpio)
+        # Check if pin is PRODUCTION_MODE_PIN
+        self._check_production_mode_pin(board_gpio)
 
         button = digitalio.DigitalInOut(board_gpio)
         button.direction = digitalio.Direction.INPUT
-        button.pull = digitalio.Pull.DOWN
-        
-        self.buttons[label] = {
+        button.pull = SWITCH_MODE
+        kk = a.get('kbd_key')
+        btn = {
             'pin': button,
-            'state': False,
+            'pressed': False,
             'last_change': time.monotonic(),
-            'kbd_key': getattr(Keycode, kbd_key) if kbd_key else None,
-            'long_press_threshold': long_press_threshold,
-            'macro_short': macro_short,
-            'macro_long': macro_long
+            'kbd_key': getattr(Keycode, kk) if kk else None,
+            'long_press_threshold': a.get('long_press_threshold'),
+            'macro_press': a.get('macro_press'),
+            'macro_long': a.get('macro_long'),
+            'macro_release': a.get('macro_release'),
+            'macro_long_ran': False
         }
+        # Error handling after defining btn, so we don't have to a.get() everything
+        if btn['kbd_key'] is None and btn['macro_press'] is None:
+            raise ValueError('Must specify either kbd_key or macro_press/macro_long/macro_release')
+        if btn['kbd_key'] is not None and (btn['macro_press'] is not None or btn['long_press_threshold'] is not None or btn['macro_release'] is not None):
+            raise ValueError('For advanced usage, use macro_press/macro_long/macro_release instead of kbd_key')
+        self.buttons[label] = btn
 
-    def add_encoder(self, label=None, pin_a=None, pin_b=None, gpio_a=None, gpio_b=None,
-                   clockwise_key=None, counterclockwise_key=None, 
-                   clockwise_macro=None, counterclockwise_macro=None,
-                   scroll_mode=None, modifier_key=None):
+    def add_encoder(self, label, **kwargs):
+    # def add_encoder(self, label=None, pin_a=None, pin_b=None, gpio_a=None, gpio_b=None,
+    #                clockwise_key=None, counterclockwise_key=None, 
+    #                clockwise_macro=None, counterclockwise_macro=None,
+    #                scroll_mode=None, modifier_key=None):
         """Add a rotary encoder to the controller.
         
         Args:
@@ -238,47 +181,48 @@ class ButtonController:
             modifier_key (str, optional): Modifier key to use (e.g., 'SHIFT', 'CONTROL', 'COMMAND', 'ALT')
             
         Raises:
-            ValueError: If pin configuration is invalid or if using EDIT_MODE_PIN
+            ValueError: If pin configuration is invalid or if using PRODUCTION_MODE_PIN
         """
+        # unpack the kwargs
+        a = {}
+        for key, value in kwargs.items():
+            print(key)
+            a[key] = value  # Create a local variable with the name of the key
         if not label:
             label = f"encoder_{len(self.encoders)}"
             
-        # Basic definition error handling
-        if clockwise_key is None and clockwise_macro is None and scroll_mode is None:
-            raise ValueError('Must specify either clockwise_key, clockwise_macro, or scroll_mode')
-        if clockwise_key is not None and clockwise_macro is not None:
-            raise ValueError('Must specify only clockwise_key or clockwise_macro')
-        if counterclockwise_key is not None and counterclockwise_macro is not None:
-            raise ValueError('Must specify only counterclockwise_key or counterclockwise_macro')
-            
+
         # Get GPIO numbers and check pins
-        gpio_number_a = self._get_gpio_number(pin=pin_a, gpio=gpio_a)
-        gpio_number_b = self._get_gpio_number(pin=pin_b, gpio=gpio_b)
+        gpio_number_a = self._get_gpio_number(pin=a.get('pin_a'), gpio=a.get('gpio_a'))
+        gpio_number_b = self._get_gpio_number(pin=a.get('pin_b'), gpio=a.get('gpio_b'))
         
-        # Check if either pin is EDIT_MODE_PIN
+        # Check if either pin is PRODUCTION_MODE_PIN
         board_gpio_a = self.gpio.get_board_pin(gpio_number_a)
         board_gpio_b = self.gpio.get_board_pin(gpio_number_b)
-        self._check_edit_mode_pin(board_gpio_a)
-        self._check_edit_mode_pin(board_gpio_b)
-            
-        # Create the encoder using rotaryio
-        encoder = rotaryio.IncrementalEncoder(board_gpio_a, board_gpio_b)
-        
-        # Convert modifier key string to Keycode if provided
-        modifier = None
-        if modifier_key:
-            modifier = getattr(Keycode, modifier_key.upper())
-        
-        self.encoders[label] = {
-            'encoder': encoder,
+        self._check_production_mode_pin(board_gpio_a)
+        self._check_production_mode_pin(board_gpio_b)
+        kk1 = a.get('clockwise_key')
+        kk2 = a.get('counterclockwise_key')
+        kkm = a.get('modifier_key')
+        enc = {
+            'encoder': rotaryio.IncrementalEncoder(board_gpio_a, board_gpio_b),
             'last_position': None,
-            'clockwise_key': getattr(Keycode, clockwise_key) if clockwise_key else None,
-            'counterclockwise_key': getattr(Keycode, counterclockwise_key) if counterclockwise_key else None,
-            'clockwise_macro': clockwise_macro,
-            'counterclockwise_macro': counterclockwise_macro,
-            'scroll_mode': scroll_mode,
-            'modifier_key': modifier
+            'clockwise_key': getattr(Keycode, kk1) if kk1 else None,
+            'counterclockwise_key': getattr(Keycode, kk2) if kk2 else None,
+            'clockwise_macro': a.get('clockwise_macro'),
+            'counterclockwise_macro': a.get('counterclockwise_macro'),
+            'scroll_mode': a.get('scroll_mode'),
+            'modifier_key': getattr(Keycode, kkm) if kkm else None
         }
+        # Basic definition error handling
+        if enc['clockwise_key'] is None and enc['clockwise_macro'] is None and enc['scroll_mode'] is None:
+            raise ValueError('Must specify either clockwise_key, clockwise_macro, or scroll_mode')
+        if enc['clockwise_key'] is not None and enc['clockwise_macro'] is not None:
+            raise ValueError('Must specify only clockwise_key or clockwise_macro')
+        if enc['counterclockwise_key'] is not None and enc['counterclockwise_macro'] is not None:
+            raise ValueError('Must specify only counterclockwise_key or counterclockwise_macro')
+        self.encoders[label] = enc
+            
 
     def raw_press(self, *keys):
         self.keyboard.press(*keys)
@@ -378,73 +322,44 @@ class ButtonController:
     def _handle_key(self, label, button_config):
         """Handle key press/release events and execute corresponding actions.
         
-        This method is called by the main loop to process button state changes.
-        It handles both keyboard keys and macro functions, with support for
-        long press detection.
-        
         Args:
             label (str): Label of the button being handled
-            button_config (dict): Configuration dictionary containing:
-                - pin: DigitalInOut object for the button
-                - state: Current button state
-                - last_change: Time of last state change
-                - kbd_key: Keycode to send (if any)
-                - long_press_threshold: Time for long press (if any)
-                - macro_short: Function to call on short press
-                - macro_long: Function to call on long press
+            button_config (dict): Configuration for the button including pin, state, etc.
         """
         current_state = button_config['pin'].value
         current_time = time.monotonic()
-        
-        # Button state changed
-        if current_state != button_config['state']:
+        if SWITCH_MODE == digitalio.Pull.UP:
+            current_state = not current_state
+        # Has the button state changed?
+        if current_state != button_config['pressed']:
             # Button pressed
             if current_state:
-                # Reset the last change time
+                # start the buttons timer
                 button_config['last_change'] = current_time
                 
                 # If it's a keyboard key, press it
                 if button_config['kbd_key']:
                     self.keyboard.press(button_config['kbd_key'])
                 # If it's a short press macro, execute it
-                elif button_config['macro_short']:
-                    button_config['macro_short']()
-            
+                if button_config['macro_press']:
+                    button_config['macro_press']()
             # Button released
             else:
                 # If it's a keyboard key, release it
                 if button_config['kbd_key']:
                     self.keyboard.release(button_config['kbd_key'])
-                # If it has a long press threshold and macro
-                elif (button_config['long_press_threshold'] and 
-                      button_config['macro_long'] and 
-                      current_time - button_config['last_change'] >= button_config['long_press_threshold']):
-                    # Execute long press macro
-                    button_config['macro_long']()
-                # If it has a short press macro and we're under the long press threshold
-                elif button_config['macro_short'] and (
-                    not button_config['long_press_threshold'] or 
-                    current_time - button_config['last_change'] < button_config['long_press_threshold']
-                ):
-                    # Execute short press macro
-                    button_config['macro_short']()
-            
+                # If it has a release macro, execute it
+                if button_config['macro_release']:
+                    button_config['macro_release']()
+                button_config['macro_long_ran'] = False
             # Update state
-            button_config['state'] = current_state
-
+            button_config['pressed'] = current_state
+        # Execute long press macro if threshold is exceeded
+        if button_config['pressed'] is True and button_config['macro_long'] is not None and button_config['macro_long_ran'] is False and current_time - button_config['last_change'] >= button_config['long_press_threshold']:
+                button_config['macro_long']()  
+                button_config['macro_long_ran'] = True
     def run(self):
-        """Main loop to handle all button and encoder events.
-        
-        This method runs indefinitely, processing all configured buttons and
-        encoders. It handles:
-        - Button press/release detection
-        - Long press timing
-        - Encoder rotation
-        - Key press/release events
-        - Macro execution
-        
-        The loop includes a small delay to prevent excessive CPU usage.
-        """
+        """Main loop to handle all button and encoder events."""
         while True:
             # Handle buttons
             for label, button_config in self.buttons.items():
@@ -455,21 +370,10 @@ class ButtonController:
                 self._handle_encoder(label, encoder_config)
                 
             # Small delay to prevent excessive CPU usage
-            time.sleep(0.01)
+            time.sleep(0.02)
 
 class gpio_diag:
-    """Diagnostic tool for monitoring GPIO pin state changes.
-    
-    This class provides a simple interface for monitoring the state of all
-    GPIO pins on the Raspberry Pi Pico. It's particularly useful for:
-    - Testing button and encoder connections
-    - Debugging pin configuration issues
-    - Verifying pull-up/pull-down behavior
-    
-    Example:
-        >>> diag = gpio_diag()
-        >>> diag.monitor_gpio()  # Starts monitoring all GPIO pins
-    """
+    """Diagnostic tool to monitor GPIO pin state changes."""
     
     def __init__(self):
         # Initialize GPIO helper
@@ -489,7 +393,7 @@ class gpio_diag:
                 pin = self.gpio.get_board_pin(gpio_num)
                 io = digitalio.DigitalInOut(pin)
                 io.direction = digitalio.Direction.INPUT
-                io.pull = digitalio.Pull.DOWN
+                io.pull = SWITCH_MODE
                 pins[gpio_num] = io
                 pin_states[gpio_num] = False
             except Exception as e:

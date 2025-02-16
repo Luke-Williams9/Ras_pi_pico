@@ -1,10 +1,3 @@
-https://learn.adafruit.com/customizing-usb-devices-in-circuitpython/circuitpy-midi-serial
-
-
-Pinouts
-
-https://www.raspberrypi.com/documentation/microcontrollers/images/pico-pinout.svg
-
 # Raspberry Pi Pico Macro Pad
 
 A customizable macro pad implementation for the Raspberry Pi Pico, featuring support for buttons and rotary encoders. Perfect for window management, media controls, and custom keyboard shortcuts.
@@ -71,7 +64,7 @@ A customizable macro pad implementation for the Raspberry Pi Pico, featuring sup
 ## Hardware Setup
 
 1. **Edit Mode Switch**
-   - Connect GPIO22 (Physical Pin 29) to one terminal of an SPDT switch
+   - Connect GPIO22 (Physical Pin 29) to one terminal of an SPST switch
    - Connect 3.3V to the other terminal
    - The switch enables/disables USB drive access and diagnostic mode
 
@@ -168,3 +161,10 @@ Feel free to submit issues and pull requests for:
 ## License
 
 This project is released under the MIT License. See LICENSE file for details.
+
+https://learn.adafruit.com/customizing-usb-devices-in-circuitpython/circuitpy-midi-serial
+
+
+Pinouts
+
+https://www.raspberrypi.com/documentation/microcontrollers/images/pico-pinout.svg

@@ -1,3 +1,8 @@
 Adafruit CircuitPython 9.1.4 on 2024-09-17; Raspberry Pi Pico with rp2040
 Board ID:raspberry_pi_pico
 UID:E66118604B7D3C25
+boot.py output:
+Edit mode enabled
+Traceback (most recent call last):
+  File "boot.py", line 12, in <module>
+AttributeError: can't set attribute 'auto_reload'
