@@ -3,12 +3,13 @@ import board
 import digitalio
 import usb_hid
 import rotaryio
+import supervisor
 from adafruit_hid.keyboard import Keyboard
 from adafruit_hid.keycode import Keycode
 from adafruit_hid.mouse import Mouse
 from adafruit_hid.consumer_control import ConsumerControl
 from adafruit_hid.consumer_control_code import ConsumerControlCode
-from env import PRODUCTION_MODE_PIN, SWITCH_MODE
+from env import PRODUCTION_MODE_PIN, SWITCH_MODE, TEST_MODE
 
 class ButtonController:
     class PicoGPIO:
@@ -68,10 +69,10 @@ class ButtonController:
         
         # Initialize other components
         self.buttons = {}
-        self.encoders = {}  # Store encoder configurations
         self.keyboard = Keyboard(usb_hid.devices)
         self.mouse = Mouse(usb_hid.devices)
         self.cc = ConsumerControl(usb_hid.devices)  # For media controls
+        
 
     def _check_production_mode_pin(self, board_gpio):
         """Check if the given GPIO pin is the PRODUCTION_MODE_PIN.
@@ -107,7 +108,6 @@ class ButtonController:
             return self.gpio.get_gpio_pin(pin)
         return gpio
 
-    #def add_button(self, label, pin=None, gpio=None, kbd_key=None, long_press_threshold=None, macro_press=None, macro_long=None, macro_release=None):
     def add_button(self, label, **kwargs):
         """Add a button to the controller.
         
@@ -127,9 +127,10 @@ class ButtonController:
         # unpack the kwargs
         a = {}
         for key, value in kwargs.items():
-            print(key)
             a[key] = value  # Create a local variable with the name of the key
-        
+        print('---------------------------------')
+        print(f"Add Button - {label}")
+        print(f"kwargs: {kwargs}")
         # Normalize pin definition
 
         gpio_number = self._get_gpio_number(pin=a.get('pin'), gpio=a.get('gpio'))
@@ -153,6 +154,10 @@ class ButtonController:
             'macro_release': a.get('macro_release'),
             'macro_long_ran': False
         }
+        
+        print(f"GPIO{gpio_number}")
+        # for key, value in btn.items():
+        #     print(f"{key}: {value}")
         # Error handling after defining btn, so we don't have to a.get() everything
         if btn['kbd_key'] is None and btn['macro_press'] is None:
             raise ValueError('Must specify either kbd_key or macro_press/macro_long/macro_release')
@@ -160,70 +165,26 @@ class ButtonController:
             raise ValueError('For advanced usage, use macro_press/macro_long/macro_release instead of kbd_key')
         self.buttons[label] = btn
 
-    def add_encoder(self, label, **kwargs):
-    # def add_encoder(self, label=None, pin_a=None, pin_b=None, gpio_a=None, gpio_b=None,
-    #                clockwise_key=None, counterclockwise_key=None, 
-    #                clockwise_macro=None, counterclockwise_macro=None,
-    #                scroll_mode=None, modifier_key=None):
-        """Add a rotary encoder to the controller.
+    def add_encoder(self, gpio_a, gpio_b, gpio_button, modes):
+        print('---------------------------------')
+        print(f"Add encoder")    
         
-        Args:
-            label (str, optional): Label for the encoder
-            pin_a (int, optional): Physical pin number for encoder pin A
-            pin_b (int, optional): Physical pin number for encoder pin B
-            gpio_a (int, optional): GPIO number for encoder pin A
-            gpio_b (int, optional): GPIO number for encoder pin B
-            clockwise_key (str, optional): Keycode to send on clockwise rotation
-            counterclockwise_key (str, optional): Keycode to send on counterclockwise rotation
-            clockwise_macro (callable, optional): Function to call on clockwise rotation
-            counterclockwise_macro (callable, optional): Function to call on counterclockwise rotation
-            scroll_mode (str, optional): Type of scrolling: 'horizontal', 'vertical', 'zoom', or 'volume'
-            modifier_key (str, optional): Modifier key to use (e.g., 'SHIFT', 'CONTROL', 'COMMAND', 'ALT')
-            
-        Raises:
-            ValueError: If pin configuration is invalid or if using PRODUCTION_MODE_PIN
-        """
-        # unpack the kwargs
-        a = {}
-        for key, value in kwargs.items():
-            print(key)
-            a[key] = value  # Create a local variable with the name of the key
-        if not label:
-            label = f"encoder_{len(self.encoders)}"
-            
-
-        # Get GPIO numbers and check pins
-        gpio_number_a = self._get_gpio_number(pin=a.get('pin_a'), gpio=a.get('gpio_a'))
-        gpio_number_b = self._get_gpio_number(pin=a.get('pin_b'), gpio=a.get('gpio_b'))
+        self._check_production_mode_pin(gpio_a)
+        self._check_production_mode_pin(gpio_b)
         
-        # Check if either pin is PRODUCTION_MODE_PIN
-        board_gpio_a = self.gpio.get_board_pin(gpio_number_a)
-        board_gpio_b = self.gpio.get_board_pin(gpio_number_b)
-        self._check_production_mode_pin(board_gpio_a)
-        self._check_production_mode_pin(board_gpio_b)
-        kk1 = a.get('clockwise_key')
-        kk2 = a.get('counterclockwise_key')
-        kkm = a.get('modifier_key')
-        enc = {
-            'encoder': rotaryio.IncrementalEncoder(board_gpio_a, board_gpio_b),
-            'last_position': None,
-            'clockwise_key': getattr(Keycode, kk1) if kk1 else None,
-            'counterclockwise_key': getattr(Keycode, kk2) if kk2 else None,
-            'clockwise_macro': a.get('clockwise_macro'),
-            'counterclockwise_macro': a.get('counterclockwise_macro'),
-            'scroll_mode': a.get('scroll_mode'),
-            'modifier_key': getattr(Keycode, kkm) if kkm else None
-        }
-        # Basic definition error handling
-        if enc['clockwise_key'] is None and enc['clockwise_macro'] is None and enc['scroll_mode'] is None:
-            raise ValueError('Must specify either clockwise_key, clockwise_macro, or scroll_mode')
-        if enc['clockwise_key'] is not None and enc['clockwise_macro'] is not None:
-            raise ValueError('Must specify only clockwise_key or clockwise_macro')
-        if enc['counterclockwise_key'] is not None and enc['counterclockwise_macro'] is not None:
-            raise ValueError('Must specify only counterclockwise_key or counterclockwise_macro')
-        self.encoders[label] = enc
-            
-
+        self.encoder = rotaryio.IncrementalEncoder(self.gpio.get_board_pin(gpio_a), self.gpio.get_board_pin(gpio_b))
+        self.enc_last_position = None
+        self.enc_modes = modes
+        self.enc_mode = modes[0]
+         
+        self.enc_btn = digitalio.DigitalInOut(self.gpio.get_board_pin(gpio_button))
+        self.enc_btn.direction = digitalio.Direction.INPUT
+        self.enc_btn.pull = SWITCH_MODE
+        self.enc_btn_pressed = False
+        print(f"GPIO_A: {gpio_a}, GPIO_B: {gpio_b}")
+        print(f"Modes: {modes}")        
+        
+        
     def raw_press(self, *keys):
         self.keyboard.press(*keys)
 
@@ -241,136 +202,194 @@ class ButtonController:
         time.sleep(t)
         self.raw_release(*combo, k)
 
-    def _handle_encoder(self, label, encoder_config):
-        """Handle encoder movement detection and actions."""
-        position = encoder_config['encoder'].position
-        
-        if encoder_config['last_position'] is None:
-            encoder_config['last_position'] = position
+    def _handle_encoder(self):
+        if self.enc_last_position is None:
+            self.enc_last_position = self.encoder.position
             return
-            
-        if position != encoder_config['last_position']:
+        current_state = self.enc_btn.value
+        if SWITCH_MODE == digitalio.Pull.UP:
+            current_state = not current_state
+        if current_state == True and self.enc_btn_pressed == False:
+            # encoder button pressed
+            if self.enc_mode == self.enc_modes[0]:
+                self.enc_mode = self.enc_modes[1]
+            else:
+                self.enc_mode = self.enc_modes[0]
+            self.enc_btn_pressed = True
+            print(f"encoder mode change to {self.enc_mode}")
+        if current_state == False:
+            self.enc_btn_pressed = False
+        logline = f"Encoder {self.encoder.position}"
+        
+        if self.encoder.position != self.enc_last_position:
             # Calculate number of steps moved
-            steps = position - encoder_config['last_position']
+            steps = self.encoder.position - (self.enc_last_position or 0)
             
-            # Get the configured modifier key or use defaults
-            modifier = encoder_config['modifier_key']
-            
-            if encoder_config['scroll_mode'] == 'horizontal':
+            if self.enc_mode == 'horizontal':
+                logline = f"{logline} horizontal scroll"
                 # Horizontal scroll with configurable modifier (default: SHIFT)
-                mod_key = modifier or Keycode.SHIFT
+                mod_key = Keycode.SHIFT
                 if steps > 0:
-                    self.keyboard.press(mod_key)
-                    self.mouse.move(wheel=-1)
-                    self.keyboard.release(mod_key)
+                    # scroll left
+                    logline = f"{logline} left"
+                    if not TEST_MODE:
+                        self.keyboard.press(mod_key)
+                        self.mouse.move(wheel=-1)
+                        self.keyboard.release(mod_key)
                     time.sleep(0.01)  # Small delay between scrolls
                 else:
-                    self.keyboard.press(mod_key)
-                    self.mouse.move(wheel=1)
-                    self.keyboard.release(mod_key)
+                    # scroll right
+                    logline = f"{logline} right"
+                    if not TEST_MODE:
+                        self.keyboard.press(mod_key)
+                        self.mouse.move(wheel=1)
+                        self.keyboard.release(mod_key)
                     time.sleep(0.01)  # Small delay between scrolls
-            elif encoder_config['scroll_mode'] == 'zoom':
+            elif self.enc_mode == 'zoom':
                 # Zoom with configurable modifier (default: CONTROL)
-                mod_key = modifier or Keycode.CONTROL
-                if steps > 0:
-                    self.keyboard.press(mod_key)
-                    self.mouse.move(wheel=1)
-                    self.keyboard.release(mod_key)
+                mod_key = Keycode.CONTROL
+                logline = f"{logline} zoom"
+                if steps < 0:
+                    # Zoom in
+                    logline = f"{logline} in"
+                    if not TEST_MODE:
+                        self.keyboard.press(mod_key)
+                        self.mouse.move(wheel=1)
+                        self.keyboard.release(mod_key)
                     time.sleep(0.01)  # Small delay between zooms
                 else:
-                    self.keyboard.press(mod_key)
-                    self.mouse.move(wheel=-1)
-                    self.keyboard.release(mod_key)
+                    # Zoom out
+                    logline = f"{logline} out"
+                    if not TEST_MODE:
+                        self.keyboard.press(mod_key)
+                        self.mouse.move(wheel=-1)
+                        self.keyboard.release(mod_key)
                     time.sleep(0.01)  # Small delay between zooms
-            elif encoder_config['scroll_mode'] == 'vertical':
+            elif self.enc_mode == 'vertical':
                 # Vertical scroll (no modifier needed)
+                logline = f"{logline} vertical scroll"
                 if steps > 0:
-                    self.mouse.move(wheel=1)
+                    # scroll up
+                    logline = f"{logline} up"
+                    if not TEST_MODE:
+                        self.mouse.move(wheel=1)
                     time.sleep(0.01)  # Small delay between scrolls
                 else:
-                    self.mouse.move(wheel=-1)
+                    # scroll down
+                    logline = f"{logline} down"
+                    if not TEST_MODE:
+                        self.mouse.move(wheel=-1)
                     time.sleep(0.01)  # Small delay between scrolls
-            elif encoder_config['scroll_mode'] == 'volume':
+            elif self.enc_mode == 'volume':
                 # Volume control
+                logline = f"{logline} volume"
                 if steps > 0:
-                    self.cc.send(ConsumerControlCode.VOLUME_INCREMENT)
+                    # Volume up
+                    logline = f"{logline} up"
+                    if not TEST_MODE:
+                        self.cc.send(ConsumerControlCode.VOLUME_INCREMENT)
                     time.sleep(0.05)  # Slightly longer delay for volume changes
                 else:
-                    self.cc.send(ConsumerControlCode.VOLUME_DECREMENT)
+                    # Volume down
+                    logline = f"{logline} down"
+                    if not TEST_MODE:
+                        self.cc.send(ConsumerControlCode.VOLUME_DECREMENT)
                     time.sleep(0.05)  # Slightly longer delay for volume changes
             else:
-                # Regular key press handling
-                if steps > 0 and encoder_config['clockwise_key']:
-                    self.keyboard.press(encoder_config['clockwise_key'])
-                    time.sleep(0.03)  # Delay between key press and release
-                    self.keyboard.release(encoder_config['clockwise_key'])
-                    time.sleep(0.02)  # Delay before next possible key press
-                elif steps < 0 and encoder_config['counterclockwise_key']:
-                    self.keyboard.press(encoder_config['counterclockwise_key'])
-                    time.sleep(0.03)  # Delay between key press and release
-                    self.keyboard.release(encoder_config['counterclockwise_key'])
-                    time.sleep(0.02)  # Delay before next possible key press
-                elif steps > 0 and encoder_config['clockwise_macro']:
-                    encoder_config['clockwise_macro']()
-                    time.sleep(0.05)  # Delay after macro execution
-                elif steps < 0 and encoder_config['counterclockwise_macro']:
-                    encoder_config['counterclockwise_macro']()
-                    time.sleep(0.05)  # Delay after macro execution
-            
-            encoder_config['last_position'] = position
+                logline = f"{logline} key"
+#                 # Regular key press handling
+#                 if steps > 0 and enc_obj['clockwise_key']:
+#                     logline = f"{logline} {enc_obj['clockwise_key']}"
+#                     if not TEST_MODE:
+#                         self.keyboard.press(enc_obj['clockwise_key'])
+#                         time.sleep(0.03)  # Delay between key press and release
+#                         self.keyboard.release(enc_obj['clockwise_key'])
+#                     time.sleep(0.02)  # Delay before next possible key press
+#                 elif steps < 0 and enc_obj['counterclockwise_key']:
+#                     logline = f"{logline} {enc_obj['counterclockwise_key']}"
+#                     if not TEST_MODE:
+#                         self.keyboard.press(enc_obj['counterclockwise_key'])
+#                         time.sleep(0.03)  # Delay between key press and release
+#                         self.keyboard.release(enc_obj['counterclockwise_key'])
+#                     time.sleep(0.02)  # Delay before next possible key press
+#                 elif steps > 0 and enc_obj['clockwise_macro']:
+#                     logline = f"{logline} {enc_obj['clockwise_macro']}"
+#                     if not TEST_MODE:
+#                         enc_obj['clockwise_macro']()
+#                     time.sleep(0.05)  # Delay after macro execution
+#                 elif steps < 0 and enc_obj['counterclockwise_macro']:
+#                     logline = f"{logline} {enc_obj['counterclockwise_macro']}"
+#                     if not TEST_MODE:
+#                         enc_obj['counterclockwise_macro']()
+#                     time.sleep(0.05)  # Delay after macro execution
+            print(logline)
+            self.enc_last_position = self.encoder.position
 
-    def _handle_key(self, label, button_config):
+    def _handle_key(self, label, btn_obj):
         """Handle key press/release events and execute corresponding actions.
         
         Args:
             label (str): Label of the button being handled
-            button_config (dict): Configuration for the button including pin, state, etc.
+            btn_obj (dict): Configuration for the button including pin, state, etc.
         """
-        current_state = button_config['pin'].value
+        current_state = btn_obj['pin'].value
         current_time = time.monotonic()
         if SWITCH_MODE == digitalio.Pull.UP:
             current_state = not current_state
         # Has the button state changed?
-        if current_state != button_config['pressed']:
+        logline = f"Button {label} - GPIO{btn_obj['pin'].value}"
+        
+        
+        if current_state != btn_obj['pressed']:
             # Button pressed
             if current_state:
+                print(f"{logline} pressed")
                 # start the buttons timer
-                button_config['last_change'] = current_time
+                btn_obj['last_change'] = current_time
                 
                 # If it's a keyboard key, press it
-                if button_config['kbd_key']:
-                    self.keyboard.press(button_config['kbd_key'])
+                if btn_obj['kbd_key']:
+                    print(f"{logline} kbd_key: {btn_obj['kbd_key']} pressed")
+                    if not TEST_MODE:
+                        self.keyboard.press(btn_obj['kbd_key'])
                 # If it's a short press macro, execute it
-                if button_config['macro_press']:
-                    button_config['macro_press']()
+                if btn_obj['macro_press']:
+                    print(f"{logline} macro_press executed")
+                    if not TEST_MODE:
+                        btn_obj['macro_press']()
             # Button released
             else:
                 # If it's a keyboard key, release it
-                if button_config['kbd_key']:
-                    self.keyboard.release(button_config['kbd_key'])
+                if btn_obj['kbd_key']:
+                    if not TEST_MODE:
+                        self.keyboard.release(btn_obj['kbd_key'])
                 # If it has a release macro, execute it
-                if button_config['macro_release']:
-                    button_config['macro_release']()
-                button_config['macro_long_ran'] = False
+                if btn_obj['macro_release']:
+                    print(f"{logline} macro_release executed")
+                    if not TEST_MODE:
+                        btn_obj['macro_release']()
+                print(f"{logline} kbd_key: {btn_obj['kbd_key']} released")
+                btn_obj['macro_long_ran'] = False
             # Update state
-            button_config['pressed'] = current_state
+            btn_obj['pressed'] = current_state
         # Execute long press macro if threshold is exceeded
-        if button_config['pressed'] is True and button_config['macro_long'] is not None and button_config['macro_long_ran'] is False and current_time - button_config['last_change'] >= button_config['long_press_threshold']:
-                button_config['macro_long']()  
-                button_config['macro_long_ran'] = True
+        if btn_obj['pressed'] is True and btn_obj['macro_long'] is not None and btn_obj['macro_long_ran'] is False and current_time - btn_obj['last_change'] >= btn_obj['long_press_threshold']:
+            print(f"{logline} macro_long executed")
+            if not TEST_MODE:
+                btn_obj['macro_long']()  
+            btn_obj['macro_long_ran'] = True
     def run(self):
         """Main loop to handle all button and encoder events."""
         while True:
+            if supervisor.runtime.serial_bytes_available:  # Check if Ctrl+C was sent
+                break  # Exit the loop and stop the program
             # Handle buttons
-            for label, button_config in self.buttons.items():
-                self._handle_key(label, button_config)
-                
-            # Handle encoders
-            for label, encoder_config in self.encoders.items():
-                self._handle_encoder(label, encoder_config)
-                
+            for label, btn_obj in self.buttons.items():
+                self._handle_key(label, btn_obj)
+            self._handle_encoder()
+            
             # Small delay to prevent excessive CPU usage
-            time.sleep(0.02)
+            time.sleep(0.05)
 
 class gpio_diag:
     """Diagnostic tool to monitor GPIO pin state changes."""
