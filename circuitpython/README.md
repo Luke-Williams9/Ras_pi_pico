@@ -1,5 +1,7 @@
 # Raspberry Pi Pico Macro Pad
 
+This is an outdated ai generated readme. Not up to date, not accurate. 
+
 A customizable macro pad implementation for the Raspberry Pi Pico, featuring support for buttons and rotary encoders. Perfect for window management, media controls, and custom keyboard shortcuts.
 
 ## Features
