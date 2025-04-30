@@ -1,3 +1,8 @@
+Switch to KMK
+https://github.com/KMKfw/kmk_firmware/blob/main/docs/en/Getting_Started.md
+
+
+
 # Raspberry Pi Pico Macro Pad
 
 This is an outdated ai generated readme. Not up to date, not accurate. 

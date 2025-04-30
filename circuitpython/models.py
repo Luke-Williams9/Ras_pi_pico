@@ -38,7 +38,7 @@ class ButtonController:
         pin_obj = self._pinObj(gpio)
         led = digitalio.DigitalInOut(pin_obj)
         led.direction = digitalio.Direction.OUTPUT
-        led.pull = SWITCH_MODE
+        led.value = False
         return led
 
     def add_button(self, label, gpio, kbd_key=None, macro_press=None, macro_long=None, macro_release=None, long_press_threshold=None):
@@ -87,33 +87,36 @@ class ButtonController:
         self.mouse.move(wheel=dir)
         time.sleep(.0001)
         self.keyboard.release(mod_key)
-
-    def add_encoder(self, gpio_a, gpio_b, gpio_button):
-        # print('---------------------------------')
-        # print(f"Add encoder")    
+        
+    def add_encoder(self, gpio_a, gpio_b, gpio_button, gpio_led1=None, gpio_led2=None):
+        print('---------------------------------')
+        print(f"Add encoder")    
         self.encoder = rotaryio.IncrementalEncoder(self._pinObj(gpio_a), self._pinObj(gpio_b))
         self.enc_last_position = None
         self.enc_mode = 0 # gpio_button switches between modes 0 and 1
+        
+        
         self.enc_actions = [
             {
                 'label': "Horizontal Scroll",
                 'macro_cw': lambda: self.h_scroll(1),
                 'macro_ccw': lambda: self.h_scroll(-1),
-                'gpio_led': None,
+                'gpio_led': self._ledObj(gpio_led1),
                 'reverse': False
             },
             {
                 'label': "Zoom",
                 'macro_cw': lambda: self.combo_press(Keycode.COMMAND, 'EQUALS'),
                 'macro_ccw': lambda: self.combo_press(Keycode.COMMAND, 'MINUS'),
-                'gpio_led': None,
-                'reverse': False
+                'gpio_led': self._ledObj(gpio_led2),
+                'reverse': True
             }
         ]
-        # print(f"GPIO_A: {gpio_a}, GPIO_B: {gpio_b}")
+        self.enc_actions[0]['gpio_led'].value = True
+        print(f"GPIO_A: {gpio_a}, GPIO_B: {gpio_b}")
         if gpio_button:
             self.enc_btn = self._btnObj(gpio_button)
-            # print("Button: {gpio_button}")
+            print("Button: {gpio_button}")
         else:
             self.enc_btn = None
         self.enc_btn_pressed = False
@@ -142,10 +145,29 @@ class ButtonController:
                 # encoder button pressed
                 if self.enc_mode == 0:
                     self.enc_mode = 1
+                    if self.enc_actions[1]['gpio_led']:
+                        if TEST_MODE:
+                            print("LED1")
+                            print(self.enc_actions[1]['gpio_led'])
+                            print("LED0")
+                            print(self.enc_actions[0]['gpio_led'])
+                        self.enc_actions[1]['gpio_led'].value = True
+                        self.enc_actions[0]['gpio_led'].value = False
                 else:
                     self.enc_mode = 0
+                    if self.enc_actions[0]['gpio_led']:
+                        if TEST_MODE:
+                            print("LED1")
+                            print(self.enc_actions[1]['gpio_led'])
+                            print("LED0")
+                            print(self.enc_actions[0]['gpio_led'])
+                        self.enc_actions[0]['gpio_led'].value = True
+                        if TEST_MODE:
+                            print(self.enc_actions[1]['gpio_led'])
+                        self.enc_actions[1]['gpio_led'].value = False
                 self.enc_btn_pressed = True
-                # print(f"encoder mode change to {self.enc_actions[self.enc_mode]['label']}")
+                if TEST_MODE:
+                    print(f"encoder mode change to {self.enc_actions[self.enc_mode]['label']}")
         if current_state == False:
             self.enc_btn_pressed = False
         logline = f"Encoder {self.encoder.position}"
@@ -159,22 +181,27 @@ class ButtonController:
             if steps < 0:
                 # CounterClockwise
                 logline = f"{logline} CCW"
+                if TEST_MODE:
+                    print(steps)                
                 if not TEST_MODE:
-                    # print(steps)                
                     action['macro_ccw']()
                     time.sleep(.002)
             else:
                 # Clockwise
                 logline = f"{logline} CW"
+                if TEST_MODE:
+                    print(steps)                
+                    print(f"Before calling macro_cw: {action['macro_cw']}")
                 if not TEST_MODE:
-                    # print(steps)                
-                    # print(f"Before calling macro_cw: {action['macro_cw']}")
                     action['macro_cw']()
-                    # print(f"After calling macro_cw: {action['macro_cw']}")
+                    if TEST_MODE:
+                        print(f"After calling macro_cw: {action['macro_cw']}")
+                if not TEST_MODE:
                     time.sleep(.002)
             logline = f"{logline} {steps} steps"
             time.sleep(.0002)
-            # print(logline)
+            if TEST_MODE:
+                print(logline)
             self.enc_last_position = self.encoder.position
 
     def _handle_key(self, label, btn_obj):
@@ -195,18 +222,21 @@ class ButtonController:
         if current_state != btn_obj['pressed']:
             # Button pressed
             if current_state:
-                # print(f"{logline} pressed")
+                if TEST_MODE:
+                    print(f"{logline} pressed")
                 # start the buttons timer
                 btn_obj['last_change'] = current_time
                 
                 # If it's a keyboard key, press it
                 if btn_obj['kbd_key']:
-                    # print(f"{logline} kbd_key: {btn_obj['kbd_key']} pressed")
+                    if TEST_MODE:
+                        print(f"{logline} kbd_key: {btn_obj['kbd_key']} pressed")
                     if not TEST_MODE:
                         self.keyboard.press(btn_obj['kbd_key'])
                 # If it's a short press macro, execute it
                 if btn_obj['macro_press']:
-                    # print(f"{logline} macro_press executed")
+                    if TEST_MODE:
+                        print(f"{logline} macro_press executed")
                     if not TEST_MODE:
                         btn_obj['macro_press']()
             # Button released
@@ -217,20 +247,25 @@ class ButtonController:
                         self.keyboard.release(btn_obj['kbd_key'])
                 # If it has a release macro, execute it
                 if btn_obj['macro_release']:
-                    # print(f"{logline} macro_release executed")
+                    if TEST_MODE:
+                        print(f"{logline} macro_release executed")
                     if not TEST_MODE:
                         btn_obj['macro_release']()
-                # print(f"{logline} kbd_key: {btn_obj['kbd_key']} released")
+                if TEST_MODE:
+                    print(f"{logline} kbd_key: {btn_obj['kbd_key']} released")
                 btn_obj['macro_long_ran'] = False
             # Update state
             btn_obj['pressed'] = current_state
         # Execute long press macro if threshold is exceeded
         if btn_obj['pressed'] is True and btn_obj['macro_long'] is not None and btn_obj['macro_long_ran'] is False and current_time - btn_obj['last_change'] >= btn_obj['long_press_threshold']:
-            # print(f"{logline} macro_long executed")
+            if TEST_MODE:
+                print(f"{logline} macro_long executed")
             if not TEST_MODE:
                 btn_obj['macro_long']()  
             btn_obj['macro_long_ran'] = True
     def run(self):
+        # self.led_run = self._ledObj(28)
+        # self.led_run.value = True
         """Main loop to handle all button and encoder events."""
         while True:
             if supervisor.runtime.serial_bytes_available:  # Check if Ctrl+C was sent
@@ -242,4 +277,3 @@ class ButtonController:
             
             # Small delay to prevent excessive CPU usage
             time.sleep(0.0002)
-

@@ -26,51 +26,70 @@ supercombo = (Keycode.CONTROL, Keycode.ALT, Keycode.COMMAND, Keycode.SHIFT)
 ctrl = Keycode.CONTROL
 cmd = Keycode.COMMAND
 
-
 button_map = {
-    "Btn_a1_DesktopLeft": {
-        "gpio": 13,
-        "macro_press": lambda: keyb.combo_press(ctrl, 'LEFT_ARROW')
+    "Btn_a1_Lock": {
+        "gpio": 9,
+        "macro_press": lambda: keyb.combo_press((ctrl,cmd),'Q')
+#        "long_press_theshold": 1,
+#        "macro_long": lambda: self.keyboard.press("ESCAPE"); time.sleep(.05); self.keyboard.release("ESCAPE")
     },
-    "Btn_a2_DesktopRight": {
-        "gpio": 6,
+    "Btn_a3_DesktopLeft": {
+        "gpio": 10,
+        "macro_press": lambda: keyb.combo_press(ctrl, 'LEFT_ARROW')        
+    },
+    "Btn_a4_DesktopRight": {
+        "gpio": 11,
         "macro_press": lambda: keyb.combo_press(ctrl, 'RIGHT_ARROW')
     },
-    "Btn_a4_Fullscreen": {
+    "Btn_b1_noneYet": {
+        "gpio": 13,
+        "macro_press": lambda: keyb.combo_press(ctrl, 'RIGHT_ARROW')
+    },
+    "Btn_b3_Fullscreen": {
         "gpio": 14,
         "macro_press": lambda: keyb.combo_press(supercombo, 'KEYPAD_NINE'),
         "long_press_threshold": 0.25,
         "macro_long":  lambda: keyb.combo_press(supercombo, 'KEYPAD_SEVEN')
     },
-    "Btn_b1_terminal": {
-        "gpio": 11,
-        "macro_press": lambda: keyb.combo_press(supercombo, 'T'),
+    "Btn_c2_LeftThird": {
+        "gpio": 7,
+        "macro_press": lambda: keyb.combo_press(supercombo, 'KEYPAD_ONE')
     },
     "Btn_c3_TopHalf": {
-        "gpio": 10,
-        "macro_press": lambda: keyb.combo_press(supercombo, 'UP_ARROW'),
-        "long_press_threshold": 0.25,
-        "macro_long":  lambda: keyb.combo_press(supercombo, 'KEYPAD_NINE')
+        "gpio": 5,
+        "macro_press": lambda: keyb.combo_press(supercombo, 'UP_ARROW')
+    },
+    "Btn_c4_RightThird": {
+        "gpio": 6,
+        "macro_press": lambda: keyb.combo_press(supercombo, 'KEYPAD_THREE')
     },
     "Btn_d2_LeftHalf": {
-        "gpio": 4,
+        "gpio": 3,
         "macro_press": lambda: keyb.combo_press(supercombo, 'LEFT_ARROW')
     },
     "Btn_d3_BottomHalf": {
-        "gpio": 12,
+        "gpio": 4,
         "macro_press": lambda: keyb.combo_press(supercombo, 'DOWN_ARROW')
     },
     "Btn_d4_RightHalf": {
-        "gpio": 15,
+        "gpio": 2,
         "macro_press": lambda: keyb.combo_press(supercombo, 'RIGHT_ARROW')
     },
-    "Btn_e1_MissionControl": {
-        "gpio": 5,
+    "Btn_f1_Terminal": {
+        "gpio": 17,
+        "macro_press": lambda: keyb.combo_press(supercombo, 'T') 
+    },
+    "Btn_f3_MissionControl": {
+        "gpio": 19,
         "macro_press": lambda: keyb.combo_press(ctrl, "UP_ARROW"),
     },
-    "Btn_f1_Spotlight": {
-        "gpio": 3,
+    "Btn_f4_Spotlight": {
+        "gpio": 12,
         "macro_press": lambda: keyb.combo_press(cmd, 'SPACEBAR')
+    },
+    "Btn_f3_AppExpose": {
+        "gpio": 15,
+        "macro_press": lambda: keyb.combo_press(ctrl, 'DOWN_ARROW')
     }
 }
 
@@ -84,9 +103,11 @@ button_map = {
 
 
 encoder = {
-    "gpio_a": 0,
-    "gpio_b": 1,
-    "gpio_button": 2
+    "gpio_a": 26,      ##
+    "gpio_b": 27,      ##
+    "gpio_button": 28, ##
+    "gpio_led1": 0,    ##
+    "gpio_led2": 1     ##
 }
 
 def main():
@@ -112,5 +133,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
