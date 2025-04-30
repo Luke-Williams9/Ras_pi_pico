@@ -80,11 +80,11 @@ button_map = {
         "macro_press": lambda: keyb.combo_press(supercombo, 'T') 
     },
     "Btn_f3_MissionControl": {
-        "gpio": 19,
+        "gpio": 16,
         "macro_press": lambda: keyb.combo_press(ctrl, "UP_ARROW"),
     },
     "Btn_f4_Spotlight": {
-        "gpio": 12,
+        "gpio": 19,
         "macro_press": lambda: keyb.combo_press(cmd, 'SPACEBAR')
     },
     "Btn_f3_AppExpose": {
